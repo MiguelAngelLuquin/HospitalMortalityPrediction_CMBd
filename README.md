@@ -14,6 +14,7 @@ MuerteHospitalariaModelo/
 ├── Modelo2.R # Segundo modelo (con mejoras o cambios)
 ├── Modelo3_1.R # Tercer modelo - parte 1
 ├── Modelo3_2.R # Tercer modelo - parte 2
+├── Modelo4.R # Modelo Final
 │
 ├── tabla_modelo.csv # Tabla resumen de características del modelo
 │
@@ -26,6 +27,8 @@ MuerteHospitalariaModelo/
 ├── ResultadosModelo3_1/ # Resultados del Modelo 3 parte 1: densidades, diagramas, heatmaps, curva ROC
 │
 ├── ResultadosModelo3_2/ # Resultados del Modelo 3 parte 2: diagramas, heatmaps, curva ROC
+│
+├── ResultadosModelo4/ # Resultados del Modelo 4: diagramas
 │
 ├── Tablas/
 │ ├── CMBD_HOS_ANONIMO_20160101_20161231.csv # Datos originales anonimizados
@@ -50,15 +53,23 @@ MuerteHospitalariaModelo/
 - Parte 1 incluye diagramas y heatmaps con datos NA.
 - Parte 2 presenta resultados por decenios de edad con diagramas y heatmaps más detallados.
 
+### Modelo 4
+- Introduce POA y tiempo de estancia y la interacción de estos con edad al cuadrado.
+- Visualizaciones: diagramas, Curva PROC, Curva PR, Log_Loss, Calibration Curve, Overlap Area.
+
 ## Requisitos
 
-- R (≥ 4.0.0)
-- Paquetes necesarios:
+- **R** (≥ 4.0.0)
+- **Paquetes necesarios:**
   - `ggplot2`
   - `pROC`
   - `dplyr`
   - `tidyr`
   - `readr`
+  - `PRROC`
+  - `scales`
+  - `binom`
+  - `caTools`
 
 ## Uso
 
@@ -70,3 +81,4 @@ source("Modelo1.R")
 source("Modelo2.R")
 source("Modelo3_1.R")
 source("Modelo3_2.R")
+source("Modelo4.R")

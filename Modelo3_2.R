@@ -28,7 +28,7 @@ expand_codigos <- function(inicio, fin) {
 }
 
 # Directorio de trabajo
-setwd("C:/Users/luqui/Desktop/IACS/MuerteHospitalariaModelo")
+setwd("C:/Users/luqui/Desktop/GitHub_MLuquin/HospitalMortalityPrediction_CMBd")
 
 # --- CARGA Y PROCESADO DE TABLAS AUXILIARES ---
 

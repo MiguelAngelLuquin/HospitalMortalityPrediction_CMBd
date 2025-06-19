@@ -31,7 +31,7 @@ expand_codigos <- function(inicio, fin) {
 ##### PREPARAMOS LOS DATOS #####
 
 # Establecer directorio de trabajo donde está el script
-setwd("C:/Users/luqui/Desktop/IACS/MuerteHospitalariaModelo")
+setwd("C:/Users/luqui/Desktop/GitHub_MLuquin/HospitalMortalityPrediction_CMBd")
 
 # Cargar tabla de secciones de CIE10
 Secciones_CIE10 <- read_csv("Tablas/Secciones_CIE10.csv")

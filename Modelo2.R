@@ -30,7 +30,7 @@ expand_codigos <- function(inicio, fin) {
 
 #### CARGA Y PREPARACIÓN DE TABLA DE SECCIONES CIE10 ####
 
-setwd("C:/Users/luqui/Desktop/IACS/MuerteHospitalariaModelo")
+setwd("C:/Users/luqui/Desktop/GitHub_MLuquin/HospitalMortalityPrediction_CMBd")
 
 Secciones_CIE10 <- read_csv("Tablas/Secciones_CIE10.csv")
 

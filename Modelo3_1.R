@@ -34,7 +34,7 @@ expand_codigos <- function(inicio, fin) {
   }
 }
 
-setwd("C:/Users/luqui/Desktop/IACS/MuerteHospitalariaModelo")
+setwd("C:/Users/luqui/Desktop/GitHub_MLuquin/HospitalMortalityPrediction_CMBd")
 
 # Cargar los datos de Secciones_CIE10
 Secciones_CIE10 <- read_csv("Tablas/Secciones_CIE10.csv")
