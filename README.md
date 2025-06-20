@@ -54,7 +54,7 @@ MuerteHospitalariaModelo/
 - Parte 2 presenta resultados por decenios de edad con diagramas y heatmaps más detallados.
 
 ### Modelo 4
-- Introduce POA y tiempo de estancia y la interacción de estos con edad al cuadrado.
+- Introduce POA y tiempo de estancia y elimina menores de 20 años y embarazadas.
 - Visualizaciones: diagramas, Curva PROC, Curva PR, Log_Loss, Calibration Curve, Overlap Area.
 
 ## Requisitos

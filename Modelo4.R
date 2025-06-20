@@ -49,9 +49,11 @@ tabla_secciones <- Secciones_CIE10 %>%
 
 # --- CARGA Y PREPARACIÓN DE DATOS CMBD ---
 
+
 CMBDS <- read_delim("Tablas/CMBD_HOS_ANONIMO_20160101_20161231.csv", 
                     delim = ";", escape_double = FALSE, trim_ws = TRUE) %>%
-  filter(SEXO != 3)  # Eliminar sexo inválido
+  filter(SEXO != 3) %>%  # Eliminar sexo inválido
+  mutate(id = row_number())  # Añadir columna con número de fila
 
 # Columnas de diagnóstico y procedimiento
 cols_poac <- grep("^POAC\\d+", names(CMBDS), value = TRUE)
@@ -59,14 +61,21 @@ cols_diagnostico <- grep("^C\\d+", names(CMBDS), value = TRUE)
 
 # Tabla base con id y columnas diagnósticas
 tabla_base <- CMBDS %>%
-  select(all_of(cols_diagnostico), all_of(cols_poac), CIPA_anonimo) %>%
-  mutate(id = CIPA_anonimo) %>%
-  select(-CIPA_anonimo)
+  select(id, all_of(cols_diagnostico), all_of(cols_poac))
 
 # Limpieza de códigos diagnósticos (eliminar decimales)
 tabla_base[cols_diagnostico] <- lapply(tabla_base[cols_diagnostico], function(col) {
   sub("\\..*", "", as.character(col))
 })
+
+filas_embarazadas <- apply(tabla_base, 1, function(fila) {
+  any(grepl("^[O]", fila, ignore.case = FALSE))
+})
+
+
+# Paso 2: eliminar esas filas
+tabla_base <- tabla_base[!filas_embarazadas, ]
+
 
 # Convertir a formato largo y mapear secciones
 tabla_larga <- tabla_base %>%
@@ -75,6 +84,7 @@ tabla_larga <- tabla_base %>%
     names_to = c(".value", "num"),
     names_pattern = "(C|POAC)(\\d+)"
   ) %>%
+  filter(!str_starts(C, "[ZU]")) %>%
   select(-num) %>%
   filter(!is.na(C), C != "", !is.na(POAC), POAC != "") %>%
   left_join(tabla_secciones %>% select(id_codigo = id, codigo), by = c("C" = "codigo")) %>%
@@ -84,6 +94,7 @@ tabla_larga <- tabla_base %>%
   distinct(id, diagnostico, POAC) %>%
   mutate(diagnostico = paste0(POAC, diagnostico)) %>%
   select(-POAC)
+
 
 # Crear variables dummy para diagnóstico + procedimiento
 tabla_dummies <- tabla_larga %>%
@@ -104,7 +115,7 @@ tabla_variables <- CMBDS %>%
     FECALT = dmy_hm(FECALT)
   ) %>%
   transmute(
-    id = CIPA_anonimo,
+    id = id,
     FALLECIMIENTO = if_else(TIPALT == 4, 1, 0),
     FECNAC = dmy(FECNAC),
     edad = floor(interval(FECNAC, ymd("2016-01-01")) / years(1)),
@@ -119,28 +130,13 @@ tabla_modelo <- tabla_dummies %>%
   na.omit() %>%
   filter(edad >= 20)
 
-# Variables seleccionadas para modelo
-significativas <- c(
-  "S271", "S218", "S200", "S120", "S114", "S102", "S198", "S75", "S159", "S277",
-  "S143", "S24", "S37", "S144", "S146", "S129", "S232", "S57", "S21", "S265",
-  "S44", "N228", "N126", "S61", "S156", "S122", "S112", "S128", "S13", "S124",
-  "N159", "N46", "S202", "S106", "S77", "S139", "S81", "S115", "S104", "N106",
-  "N202", "S228", "S204", "S116", "N52", "N77", "S58", "N201", "S79", "S16",
-  "S40", "S160", "S205", "S212", "S54", "N96", "S87", "S25", "S82", "S31",
-  "N120", "S150", "S163", "S208", "S47", "S158", "N204", "S147", "S33", "S4",
-  "N218", "S157", "S63", "S38", "S125", "N103", "S32", "N109", "S68", "S197",
-  "S96", "N115", "S30", "S23", "S91", "N156", "N129", "N81", "N128", "N108",
-  "S119", "S210", "N4", "S73", "S110", "N82", "S90", "N116", "S123", "S164",
-  "S209", "N47", "S223", "S185", "N223", "S132", "N40", "N87", "S245", "N178",
-  "N72", "S273", "N22", "S190", "SEXO", "edad2", "tiempo_estancia_dias2"
-)
 
 tabla_modelo$edad2 <- tabla_modelo$edad^2
 tabla_modelo$tiempo_estancia_dias2 <- tabla_modelo$tiempo_estancia_dias^2
 
-tabla_modelo <- tabla_modelo[, c("FALLECIMIENTO", significativas)]
+tabla_modelo <- dplyr::select(tabla_modelo, -tiempo_estancia_dias, -edad)
 
-# --- DIVISIÓN ENTRENAMIENTO / TEST ---
+# --- MODELO DE REGRESIÓN LOGÍSTICA ---
 
 set.seed(777)  # Reproducibilidad
 trainIndex <- createDataPartition(tabla_modelo$FALLECIMIENTO, p = 0.7, list = FALSE)
@@ -150,30 +146,14 @@ datos_test  <- tabla_modelo[-trainIndex, ]
 datos_train$SEXO <- factor(datos_train$SEXO)
 datos_test$SEXO  <- factor(datos_test$SEXO)
 
-# --- AJUSTE DEL MODELO LOGÍSTICO CON INTERACCIONES ---
-
-# Variables predictoras excluyendo 'edad2' y variable respuesta 'FALLECIMIENTO'
-vars <- setdiff(significativas, c("edad2", "FALLECIMIENTO"))
-
-# Crear términos de interacción con edad2
-interacciones <- paste0(vars, ":edad2")
-
-# Combinar términos principales y de interacción
-terminos <- c(vars, "edad2", interacciones)
-
-# Crear fórmula para el modelo logístico
-formula_modelo <- as.formula(paste("FALLECIMIENTO ~", paste(terminos, collapse = " + ")))
-print(formula_modelo)
-
-# Ajustar modelo logístico con datos_test
-modelo_logit_interacciones <- glm(formula_modelo, data = datos_test, family = binomial)
-summary(modelo_logit_interacciones)
-
+modelo <- glm(FALLECIMIENTO ~., data = datos_test, family = binomial)
+summary(modelo)
+AIC(modelo)
 
 # --- EVALUACIÓN DEL MODELO ---
 
 # Predecir probabilidades en test
-prob_test <- predict(modelo_logit_interacciones, newdata = datos_test, type = "response")
+prob_test <- predict(modelo, newdata = datos_test, type = "response")
 
 # Curva ROC y AUC
 roc_obj <- roc(datos_test$FALLECIMIENTO, prob_test)
@@ -182,8 +162,8 @@ cat("AUC:", auc(roc_obj), "\n")
 
 # Umbral óptimo según Youden's J
 umbral_optimo <- coords(roc_obj, "best", best.method = "youden")["threshold"]
-cat("Umbral óptimo (Youden's J):", umbral_optimo, "\n")
 umbral_optimo <- as.numeric(umbral_optimo)
+cat("Umbral óptimo (Youden's J):", umbral_optimo, "\n")
 
 # Predicción binaria usando umbral óptimo
 predicciones_binarias <- ifelse(prob_test >= umbral_optimo, 1, 0)
@@ -299,25 +279,10 @@ calibration_data <- data.frame(bin = bins,
             n = n()) %>%
   ungroup()
 
-# Gráfico calibración simple
-ggplot(calibration_data, aes(x = media_predicha, y = frecuencia_observada)) +
-  geom_point(aes(size = n), color = "darkred", alpha = 0.7) +
-  geom_line(color = "darkred", linewidth = 1) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
-  scale_x_continuous(labels = percent_format(accuracy = 1)) +
-  scale_y_continuous(labels = percent_format(accuracy = 1)) +
-  labs(title = "Curva de calibración del modelo",
-       x = "Probabilidad media predicha",
-       y = "Frecuencia real de fallecimientos",
-       size = "N casos en bin") +
-  theme_minimal()
 
-# Curva calibración con IC, usando bins más finos en rangos bajos
-breaks_finos <- seq(0, 0.15, by = 0.005)
-breaks_normales <- seq(0.15, 0.5, by = 0.05)
-breaks <- sort(unique(c(breaks_finos, breaks_normales)))
+breaks <- seq(0, 1, by = 0.05)
 
-idx <- prob_test <= 0.5
+idx <- prob_test <= 1
 
 bins <- cut(prob_test[idx], breaks = breaks, include.lowest = TRUE, right = TRUE)
 
@@ -339,27 +304,13 @@ ggplot(calibration_data, aes(x = media_predicha, y = frecuencia_observada)) +
   geom_line(color = "darkred", linewidth = 1) +
   geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper), fill = "darkred", alpha = 0.2) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
-  scale_x_continuous(labels = percent_format(accuracy = 1), limits = c(0, 0.5), expand = c(0, 0)) +
-  scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 0.8), expand = c(0, 0)) +
-  labs(title = "Curva de calibración del modelo (hasta 50%) con IC",
+  scale_x_continuous(labels = percent_format(accuracy = 1), limits = c(0, 1), expand = c(0, 0)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 1), expand = c(0, 0)) +
+  labs(title = "Curva de calibración del modelo con IC",
        x = "Probabilidad media predicha",
        y = "Frecuencia real de fallecimientos",
        size = "N casos en bin") +
   theme_minimal()
-
-ggplot(calibration_data, aes(x = media_predicha, y = frecuencia_observada)) +
-  geom_point(aes(size = n), color = "darkred", alpha = 0.7) +
-  geom_line(color = "darkred", linewidth = 1) +
-  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper), fill = "darkred", alpha = 0.2) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
-  scale_x_continuous(labels = percent_format(accuracy = 1), limits = c(0, 0.15), expand = c(0, 0)) +
-  scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 0.3), expand = c(0, 0)) +
-  labs(title = "Curva de calibración del modelo (zoom 0-15%) con IC",
-       x = "Probabilidad media predicha",
-       y = "Frecuencia real de fallecimientos",
-       size = "N casos en bin") +
-  theme_minimal()
-
 
 # --- GRÁFICOS POR EDAD ---
 
